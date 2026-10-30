@@ -41,7 +41,27 @@ test('example HTML with BR-split display formulas creates three native nodes', a
     assert.equal(doc.querySelector('code').textContent, '$not-a-formula$');
     assert.equal(doc.querySelector('pre code').textContent, '$code_should_stay_plain$\n');
     assert.ok(formulas[2].dataset.formula.includes('\\sum'));
+    assert.equal(formulas[2].parentElement.style.textAlign, 'center');
+    assert.equal(formulas[0].parentElement.style.textAlign, '');
     assert.equal(call('transformHtml', converted), converted);
+  } finally { dom.window.close(); }
+});
+
+test('only standalone display formulas are centered through both import paths', () => {
+  const { dom, call } = load();
+  try {
+    const parser = new MarkdownIt({ html: true, breaks: true });
+    const source = 'before $x$ after\n\n$$y$$\n\ntext $$z$$\n\n$alone$\n\n`$$code$$`';
+    for (const markdown of [source, call('protectMarkdown', source)]) {
+      const converted = call('transformHtml', parser.render(markdown));
+      const doc = new dom.window.DOMParser().parseFromString(converted, 'text/html');
+      const formulas = [...doc.querySelectorAll('img[data-type="latex"]')];
+      assert.deepEqual(formulas.map(img => img.closest('p')?.style.textAlign || ''), ['', 'center', '', '']);
+      assert.equal(formulas.length, 4);
+      assert.equal(doc.querySelector('code').textContent, '$$code$$');
+      assert.equal(doc.querySelectorAll('[data-bili-md-display]').length, 0);
+      assert.equal(call('transformHtml', converted), converted);
+    }
   } finally { dom.window.close(); }
 });
 
@@ -55,6 +75,30 @@ test('multiple formulas, unmatched dollars and code boundaries remain safe', () 
     assert.equal(doc.querySelector('p').textContent, 'A  B  C $');
     assert.equal(doc.querySelector('pre').textContent, '$z$');
     assert.equal(call('transformHtml', '<p>$$</p>'), '<p>$$</p>');
+  } finally { dom.window.close(); }
+});
+
+test('protected multiline display math reaches capture paste with native alignment and exact TeX', () => {
+  const { dom, call } = load();
+  try {
+    const { window } = dom;
+    const parser = new MarkdownIt({ html: true, breaks: true });
+    const source = String.raw`\sum_{i=1}^{n} i = \frac{n(n+1)}{2}`;
+    const protectedMarkdown = call('protectMarkdown', '$$\n' + source + '\n$$');
+    assert.ok(!protectedMarkdown.includes('$'));
+    let html = parser.render(protectedMarkdown);
+    const event = new window.Event('paste', { bubbles: true });
+    Object.defineProperty(event, 'clipboardData', { value: {
+      getData: type => type === 'text/html' ? html : '',
+      setData: (_type, value) => { html = value; },
+    } });
+    window.document.querySelector('.ProseMirror').dispatchEvent(event);
+    const doc = new window.DOMParser().parseFromString(html, 'text/html');
+    const image = doc.querySelector('img[data-type="latex"]');
+    assert.equal(image.dataset.formula, source);
+    assert.equal(image.parentElement.tagName, 'P');
+    assert.equal(image.parentElement.style.textAlign, 'center');
+    assert.equal(doc.querySelectorAll('[data-bili-md-display]').length, 0);
   } finally { dom.window.close(); }
 });
 

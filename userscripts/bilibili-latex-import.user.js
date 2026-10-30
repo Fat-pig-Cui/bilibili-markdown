@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Bilibili 专栏 Markdown 公式与本地图片导入
 // @namespace    https://github.com/Fat-pig-Cui/bilibili-markdown
-// @version      0.2.6
-// @description  保留 Markdown 原生行内公式，并通过选择文档文件夹上传本地图片
+// @version      0.3.3
+// @description  保留 Markdown 原生公式，将表格转为图片，并上传文档引用的本地图片
 // @match        https://member.bilibili.com/york/read-draft*
 // @match        https://member.bilibili.com/york/read-editor*
 // @author       Fat-pig-Cui
@@ -18,7 +18,7 @@
   'use strict';
 
   const MATHJAX_ENDPOINT = 'https://api.bilibili.com/x/web-frontend/mathjax/tex?formula=';
-  const VERSION = '0.2.6';
+  const VERSION = '0.3.3';
   // Re-running from Console must not leave multiple listeners behind.
   window.biliLatexImport?.uninstall?.();
 
@@ -104,7 +104,7 @@
     }
     let output = markdown;
     for (const span of spans.reverse()) {
-      const image = '<img data-type="latex" data-formula="' + attr(span.source) +
+      const image = '<img data-type="latex"' + (span.display ? ' data-bili-md-display="true"' : '') + ' data-formula="' + attr(span.source) +
         '" alt="' + attr(span.source) + '" src="' + attr(MATHJAX_ENDPOINT + encodeURIComponent(span.source)) + '">';
       output = output.slice(0, span.start) + image + output.slice(span.end);
     }
@@ -195,7 +195,7 @@
   }
 
   function transformHtml(html) {
-    if (!html || !html.includes('$')) return html;
+    if (!html || (!html.includes('$') && !html.includes('data-bili-md-display'))) return html;
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const blocks = new Set(['BODY', 'P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'UL', 'OL', 'BLOCKQUOTE']);
     const runs = [];
@@ -231,9 +231,31 @@
         range.setStart(first.node, span.start - first.start);
         range.setEnd(last.node, span.end - last.start);
         range.deleteContents();
-        range.insertNode(formulaImage(doc, span.source));
+        const image = formulaImage(doc, span.source);
+        if (span.display) image.setAttribute('data-bili-md-display', 'true');
+        range.insertNode(image);
         changed = true;
       }
+    }
+    for (const image of doc.querySelectorAll('img[data-type="latex"][data-bili-md-display="true"]')) {
+      if (image.closest('pre, code, script, style, textarea')) continue;
+      image.removeAttribute('data-bili-md-display');
+      let paragraph = image.closest('p');
+      // markdown-it treats a standalone protected <img> as an HTML block,
+      // so it can arrive without the paragraph the native parser would add.
+      if (!paragraph && ['BODY', 'BLOCKQUOTE', 'LI'].includes(image.parentElement?.tagName)) {
+        paragraph = doc.createElement('p');
+        image.replaceWith(paragraph);
+        paragraph.append(image);
+      }
+      // Use the same persisted paragraph attribute as Bilibili's alignment
+      // toolbar. Never center a paragraph containing prose or inline formulas.
+      if (paragraph && [...paragraph.childNodes].every(node =>
+        (node.nodeType === 3 && !node.textContent.trim()) || node === image ||
+        (node.nodeType === 1 && node.tagName === 'BR'))) {
+        paragraph.style.textAlign = 'center';
+      }
+      changed = true;
     }
     return changed ? doc.body.innerHTML : html;
   }
@@ -415,12 +437,275 @@
     return sources;
   }
 
-  async function planImport(files, markdownPath, parser, limits = {}) {
+  // Tables must be consumed before Bilibili strips their Markdown syntax.
+  // A separate parser keeps our table rules independent of the native preset.
+  function extractTables(markdown, parser) {
+    const tableParser = new parser.constructor({ html: true, breaks: true });
+    if (typeof tableParser.parse !== 'function') throw new Error('无法创建表格解析器，编辑器接口可能已变化。');
+    const tokens = tableParser.parse(markdown, {});
+    const tables = [];
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i];
+      if (token.type === 'html_block' && /<table\b/i.test(token.content) && !/^\s*<(?:pre|code)\b/i.test(token.content)) {
+        throw new Error('暂不支持 HTML 表格或合并单元格，请改用普通 Markdown 管线表格。');
+      }
+      if (token.type !== 'table_open') continue;
+      if (token.level !== 0) throw new Error('暂不支持列表或引用内嵌套的表格，请将表格移到独立段落。');
+      const table = { start: token.map[0], end: token.map[1], rows: [], align: [] };
+      let row, header = false, cell = -1;
+      for (i++; i < tokens.length && tokens[i].type !== 'table_close'; i++) {
+        const t = tokens[i];
+        if (t.type === 'thead_open') header = true;
+        if (t.type === 'thead_close') header = false;
+        if (t.type === 'tr_open') { row = []; table.rows.push(row); cell = -1; }
+        if (t.type === 'th_open' || t.type === 'td_open') {
+          cell++;
+          if (header) table.align[cell] = (t.attrGet('style') || '').replace('text-align:', '').trim() || 'left';
+        }
+        if (t.type === 'inline') {
+          const runs = [];
+          let bold = 0, italic = 0, strike = 0, link = 0;
+          for (const child of t.children || []) {
+            if (child.type === 'strong_open') { bold++; continue; }
+            if (child.type === 'strong_close') { bold--; continue; }
+            if (child.type === 'em_open') { italic++; continue; }
+            if (child.type === 'em_close') { italic--; continue; }
+            if (child.type === 's_open') { strike++; continue; }
+            if (child.type === 's_close') { strike--; continue; }
+            if (child.type === 'link_open') { link++; continue; }
+            if (child.type === 'link_close') { link--; continue; }
+            const style = { bold: header || bold > 0, italic: italic > 0, strike: strike > 0, link: link > 0 };
+            if (child.type === 'image') throw new Error(`表格 ${tables.length + 1} 包含图片，首版暂不支持，请将图片移到表格外。`);
+            if (child.type === 'html_inline') {
+              const doc = new DOMParser().parseFromString(child.content, 'text/html');
+              const image = doc.querySelector('img');
+              if (image) {
+                if (image.getAttribute('data-type') !== 'latex') throw new Error(`表格 ${tables.length + 1} 包含图片，暂不支持。`);
+                runs.push({ ...style, math: image.getAttribute('data-formula') || '' });
+              } else if (/^<br\b/i.test(child.content)) runs.push({ ...style, text: '\n' });
+              else if (doc.body.textContent) runs.push({ ...style, text: doc.body.textContent });
+            } else if (child.type === 'softbreak' || child.type === 'hardbreak') runs.push({ ...style, text: '\n' });
+            else if (child.type === 'text' || child.type === 'code_inline') {
+              if (child.content) runs.push({ ...style, text: child.content, code: child.type === 'code_inline' });
+            } else if (!child.type.endsWith('_open') && !child.type.endsWith('_close')) {
+              throw new Error(`表格 ${tables.length + 1} 包含不支持的单元格内容：${child.type}`);
+            }
+          }
+          row.push(runs);
+        }
+      }
+      const columns = table.rows[0]?.length || 0;
+      const characters = table.rows.flat(2).reduce((total, run) => total + (run.text || run.math || '').length, 0);
+      if (!columns || columns > 8) throw new Error('表格最多支持 8 列；请拆分宽表以保证手机可读性。');
+      if (table.rows.length * columns > 2000 || characters > 50000) throw new Error('表格内容过大，请拆分后导入。');
+      tables.push(table);
+    }
+    return tables;
+  }
+
+  let tableMathFrame = null;
+  let tableMathReady = null;
+  function tableMathJax() {
+    if (tableMathReady) return tableMathReady;
+    tableMathReady = new Promise((resolve, reject) => {
+      const frame = document.createElement('iframe');
+      tableMathFrame = frame;
+      frame.hidden = true;
+      frame.setAttribute('aria-hidden', 'true');
+      document.body.append(frame);
+      // Isolate MathJax so it never scans or changes the article editor.
+      const child = frame.contentWindow;
+      child.MathJax = { startup: { typeset: false }, svg: { fontCache: 'none' } };
+      const script = frame.contentDocument.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js';
+      script.onload = () => {
+        if (!child.MathJax?.startup?.promise) { reject(new Error('表格公式渲染器初始化失败。')); return; }
+        child.MathJax.startup.promise.then(() => resolve(child.MathJax), reject);
+      };
+      script.onerror = () => reject(new Error('无法加载表格公式渲染器，请检查网络后重试。'));
+      frame.contentDocument.head.append(script);
+    }).catch(error => {
+      tableMathFrame?.remove(); tableMathFrame = null; tableMathReady = null;
+      throw error;
+    });
+    return tableMathReady;
+  }
+
+  const TABLE_FONT = 26;
+  const TABLE_PAD = 14;
+  function tableFont(run) {
+    return `${run.italic ? 'italic ' : ''}${run.bold ? '600 ' : ''}${TABLE_FONT}px ${run.code ? 'monospace' : '"PingFang SC","Microsoft YaHei",sans-serif'}`;
+  }
+
+  async function tableFormula(source, signal) {
+    const engine = await bounded(tableMathJax(), signal);
+    assertActive(signal);
+    const node = await bounded(engine.tex2svgPromise(source, { display: false }), signal);
+    if (node.querySelector('[data-mjx-error]')) throw new Error('表格中有无法渲染的公式：' + source);
+    const svg = node.querySelector('svg');
+    if (!svg) throw new Error('表格公式未生成 SVG。');
+    const width = parseFloat(svg.getAttribute('width')) * TABLE_FONT / 2;
+    const height = parseFloat(svg.getAttribute('height')) * TABLE_FONT / 2;
+    if (!(width > 0 && height > 0)) throw new Error('表格公式尺寸无效。');
+    svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    svg.setAttribute('width', String(width)); svg.setAttribute('height', String(height));
+    svg.style.color = '#18191c';
+    const url = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(svg)], { type: 'image/svg+xml' }));
+    try {
+      const image = new Image();
+      await bounded(new Promise((resolve, reject) => {
+        image.onload = resolve; image.onerror = () => reject(new Error('表格公式 SVG 无法绘制。')); image.src = url;
+      }), signal);
+      return { image, width, height };
+    } finally { URL.revokeObjectURL(url); }
+  }
+
+  function layoutTable(table, context, formulae = new Map()) {
+    const natural = table.align.map(() => 90);
+    for (const row of table.rows) row.forEach((cell, column) => {
+      let width = 0;
+      for (const run of cell) {
+        context.font = tableFont(run);
+        width += run.math !== undefined ? formulae.get(run.math).width : context.measureText(run.text).width;
+      }
+      natural[column] = Math.max(natural[column], Math.min(320, width + TABLE_PAD * 2));
+    });
+    const total = natural.reduce((a, b) => a + b, 0);
+    const width = Math.min(720, total);
+    // Keep every column usable; distribute the remaining space by content.
+    const minimum = Math.min(90, width / natural.length);
+    const extra = natural.map(n => Math.max(1, n - minimum));
+    const extraTotal = extra.reduce((a, b) => a + b, 0);
+    const widths = total <= width ? natural : natural.map((_n, i) => minimum + (width - minimum * natural.length) * extra[i] / extraTotal);
+    const rows = table.rows.map((row, sourceRow) => {
+      const cells = row.map((cell, column) => {
+        const available = widths[column] - TABLE_PAD * 2;
+        const lines = [];
+        let items = [], used = 0, height = TABLE_FONT * 1.45;
+        const flush = () => { lines.push({ items, width: used, height }); items = []; used = 0; height = TABLE_FONT * 1.45; };
+        for (const run of cell) {
+          context.font = tableFont(run);
+          const atoms = run.math !== undefined ? [{ ...run, ...formulae.get(run.math) }] :
+            Array.from(run.text).map(text => ({ ...run, text, width: context.measureText(text).width, height: TABLE_FONT * 1.45 }));
+          for (const original of atoms) {
+            if (original.text === '\n') { flush(); continue; }
+            const scale = original.image ? Math.min(1, available / original.width) : 1;
+            if (scale < 0.5) throw new Error('表格公式相对于列宽过大，请拆分宽表或缩短公式后导入。');
+            const atom = { ...original, width: original.width * scale, height: original.height * scale };
+            if (used && used + atom.width > available) flush();
+            items.push(atom); used += atom.width; height = Math.max(height, atom.height + (atom.image ? 6 : 0));
+          }
+        }
+        flush();
+        return lines;
+      });
+      return { cells, sourceRow, height: Math.max(...cells.map(lines => lines.reduce((sum, line) => sum + line.height, 0))) + TABLE_PAD * 2 };
+    });
+    const pages = [];
+    let page = [rows[0]], used = rows[0].height;
+    if (used > 1400) throw new Error('表格表头过高，请缩短单元格内容。');
+    for (const row of rows.slice(1)) {
+      if (rows[0].height + row.height > 1400) throw new Error('表格单行内容过长，无法完整分页，请拆分该行。');
+      if (used + row.height > 1400) { pages.push(page); page = [rows[0]]; used = rows[0].height; }
+      page.push(row); used += row.height;
+    }
+    pages.push(page);
+    return { width, widths, pages };
+  }
+
+  async function renderTable(table, signal) {
+    await bounded(document.fonts?.ready || Promise.resolve(), signal);
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('浏览器不支持表格图片绘制。');
+    const formulae = new Map();
+    for (const run of table.rows.flat(2)) {
+      if (run.math !== undefined && !formulae.has(run.math)) formulae.set(run.math, await tableFormula(run.math, signal));
+    }
+    const layout = layoutTable(table, context, formulae);
+    const files = [];
+    for (const [pageNumber, rows] of layout.pages.entries()) {
+      assertActive(signal);
+      const height = rows.reduce((sum, row) => sum + row.height, 0) + 2;
+      canvas.width = Math.ceil(layout.width + 2) * 2; canvas.height = Math.ceil(height) * 2;
+      context.setTransform(2, 0, 0, 2, 0, 0);
+      context.fillStyle = '#fff'; context.fillRect(0, 0, canvas.width / 2, canvas.height / 2);
+      context.textBaseline = 'middle'; context.strokeStyle = '#cbd5df'; context.lineWidth = 1;
+      let y = 1;
+      for (const row of rows) {
+        let x = 1;
+        for (const [column, lines] of row.cells.entries()) {
+          const width = layout.widths[column];
+          // Use the source row number so stripes continue across page boundaries.
+          context.fillStyle = row.sourceRow === 0 ? '#edf5fa' : row.sourceRow % 2 === 0 ? '#f3f6f9' : '#fff';
+          context.fillRect(x, y, width, row.height); context.strokeRect(x, y, width, row.height);
+          const contentHeight = lines.reduce((sum, line) => sum + line.height, 0);
+          let lineY = y + (row.height - contentHeight) / 2;
+          for (const line of lines) {
+            const align = table.align[column];
+            let lineX = align === 'center' ? x + (width - line.width) / 2 : align === 'right' ? x + width - TABLE_PAD - line.width : x + TABLE_PAD;
+            for (const item of line.items) {
+              if (item.image) context.drawImage(item.image, lineX, lineY + (line.height - item.height) / 2, item.width, item.height);
+              else {
+                context.font = tableFont(item); context.fillStyle = item.link ? '#007faf' : '#18191c';
+                if (item.code) { context.fillStyle = '#f1f3f5'; context.fillRect(lineX, lineY, item.width, line.height); context.fillStyle = '#18191c'; }
+                context.fillText(item.text, lineX, lineY + line.height / 2);
+                if (item.strike || item.link) {
+                  context.strokeStyle = item.link ? '#007faf' : '#18191c'; context.beginPath();
+                  const offset = item.strike ? 0 : TABLE_FONT * 0.45;
+                  context.moveTo(lineX, lineY + line.height / 2 + offset); context.lineTo(lineX + item.width, lineY + line.height / 2 + offset); context.stroke(); context.strokeStyle = '#cbd5df';
+                }
+              }
+              lineX += item.width;
+            }
+            lineY += line.height;
+          }
+          x += width;
+        }
+        y += row.height;
+      }
+      const blob = await bounded(new Promise((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error('表格 PNG 导出失败。')), 'image/png')), signal);
+      files.push(new File([blob], `table-${pageNumber + 1}.png`, { type: 'image/png' }));
+    }
+    return files;
+  }
+
+  async function convertTables(markdown, parser, signal, renderer = renderTable, imageLimit = 18) {
+    const tables = extractTables(markdown, parser);
+    if (tables.length > imageLimit) throw new Error(`文档至少需要 ${tables.length} 张表格图片，超过当前编辑器的 ${imageLimit} 张限制。`);
+    const generated = new Map();
+    const lines = markdown.split('\n');
+    for (let index = tables.length - 1; index >= 0; index--) {
+      assertActive(signal);
+      const table = tables[index];
+      const files = await renderer(table, signal);
+      if (!files.length) throw new Error('表格转换没有生成图片。');
+      if (generated.size + files.length > imageLimit) throw new Error(`表格分页后超过当前编辑器的 ${imageLimit} 张图片限制。`);
+      const replacement = files.map((file, part) => {
+        const source = `bili-md-table:${index + 1}-${part + 1}`;
+        generated.set(source, new File([file], `table-${index + 1}-${part + 1}.png`, { type: 'image/png' }));
+        const caption = `表格 ${index + 1}` + (files.length > 1 ? `（${part + 1}/${files.length}）` : '');
+        return `<img src="${source}" alt="${caption}">`;
+      }).join('\n\n');
+      lines.splice(table.start, table.end - table.start, replacement + '\n');
+    }
+    return { markdown: lines.join('\n'), generated, tableCount: tables.length };
+  }
+
+  const tableCache = new WeakMap();
+  async function planImport(files, markdownPath, parser, limits = {}, signal) {
     const { index, root } = fileIndex(files);
     const file = index.get(markdownPath);
     if (!file || !/\.md$/i.test(markdownPath)) throw new Error('请选择文件夹中的 Markdown 文档。');
     const split = splitLeadingTitle(await readFileText(file), parser);
-    const markdown = protectMarkdown(split.markdown);
+    const protectedMarkdown = protectMarkdown(split.markdown);
+    let converted = tableCache.get(file);
+    if (!converted || converted.source !== protectedMarkdown) {
+      converted = { source: protectedMarkdown, ...await convertTables(protectedMarkdown, parser, signal, limits.tableRenderer, limits.limit || 18) };
+      if (converted.tableCount) tableCache.set(file, converted);
+    }
+    assertActive(signal);
+    const markdown = converted.markdown;
     const sources = collectImageSources(parser.parse(markdown, {}));
     const limit = limits.limit || 18;
     if (sources.length > limit) throw new Error(`文档包含 ${sources.length} 处图片，超过当前编辑器的 ${limit} 张限制。`);
@@ -430,9 +715,10 @@
     const mime = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
     for (const source of new Set(sources)) {
       try {
-        const entry = imageSource(source, markdownPath, root);
+        const generatedFile = converted.generated.get(source);
+        const entry = generatedFile ? { kind: 'local', key: source, file: generatedFile, generated: true } : imageSource(source, markdownPath, root);
         if (entry.kind === 'local') {
-          entry.file = index.get(entry.key);
+          entry.file ||= index.get(entry.key);
           if (!entry.file) throw new Error('找不到图片：' + source + '（对应 ' + entry.key + '）');
           entry.mime = entry.file.type || mime[entry.file.name.split('.').pop().toLowerCase()];
           if (!allowed.includes(entry.mime)) throw new Error('不支持的图片格式：' + source);
@@ -443,7 +729,7 @@
       } catch (error) { errors.push(error.message); }
     }
     if (errors.length) throw new Error(errors.join('\n'));
-    return { title: split.title, markdown, entries, occurrences: sources.length, markdownPath };
+    return { title: split.title, markdown, entries, occurrences: sources.length, markdownPath, tables: converted.tableCount, tableImages: converted.generated.size };
   }
 
   function checkedImage(result) {
@@ -587,10 +873,10 @@
     const original = editor.state.doc;
     const initialTitleInput = articleTitleInput();
     const originalTitle = initialTitleInput?.value;
-    const plan = await planImport(files, markdownPath, parser, options);
+    const plan = await planImport(files, markdownPath, parser, options, signal);
     const titleInput = plan.title === null ? null : checkArticleTitle(plan.title);
     assertActive(signal);
-    progress('检查完成，正在准备 ' + plan.occurrences + ' 处图片…');
+    progress(`检查完成：${plan.tables} 张表格，正在准备 ${plan.occurrences} 处图片…`);
     const replacements = await prepareImages(plan, options, signal, (done, total, path) =>
       progress(`图片 ${done}/${total}：${path}`), importOptions);
     assertActive(signal);
@@ -622,7 +908,7 @@
       }
     }
     editor.commands.updateImageCache?.();
-    return { images: plan.occurrences, uploaded: new Set([...plan.entries.values()].filter(entry => entry.kind === 'local').map(entry => entry.key)).size };
+    return { tables: plan.tables, tableImages: plan.tableImages, images: plan.occurrences, uploaded: new Set([...plan.entries.values()].filter(entry => entry.kind === 'local').map(entry => entry.key)).size };
   }
 
   function mountImageImport() {
@@ -654,13 +940,15 @@
         '#bili-md-image-panel [role="status"]{min-height:58px;margin:16px 0;padding:11px 12px;border-radius:10px;background:#f5f7f9;color:#69717d;white-space:pre-line;overflow-wrap:anywhere;font-size:12px;line-height:1.5}#bili-md-image-panel .bmi-actions{display:flex;gap:9px}#bili-md-image-panel .bmi-actions button[data-action]{height:38px;border-radius:9px;padding:0 14px;font:600 13px sans-serif;cursor:pointer}#bili-md-image-panel .bmi-actions button[data-action="import"]{flex:1;border:1px solid #00a1d6;background:#00a1d6;color:#fff;box-shadow:0 3px 8px #00a1d633}#bili-md-image-panel .bmi-actions button[data-action="import"]:hover:not(:disabled){background:#008fbe}#bili-md-image-panel .bmi-actions button[data-action="close"]{border:1px solid #dfe3e8;background:#fff;color:#59616d}#bili-md-image-panel .bmi-actions button[data-action="close"]:hover{background:#f5f7f9}#bili-md-image-panel button:disabled{cursor:not-allowed;opacity:.48}' +
         '#bili-md-image-panel .bmi-foot{margin-top:14px;color:#9aa1aa;text-align:center;font-size:11px}@media(max-width:520px){#bili-md-image-panel{right:16px!important;bottom:84px!important;width:calc(100vw - 32px)!important}#bili-md-image-import{right:16px!important;bottom:20px!important}}' +
         '</style><div class="bmi-head"><div><p class="bmi-kicker">BILIBILI MARKDOWN</p><h2>导入 Markdown 和图片</h2></div><button type="button" class="bmi-close" data-action="dismiss" aria-label="关闭">×</button></div>' +
-        '<div class="bmi-body"><p class="bmi-help">选择包含文档及图片的文件夹。导入会替换正文；首行一级标题会自动移至专栏标题。</p>' +
-        '<label class="bmi-label">文档文件夹</label><label class="bmi-drop"><span class="bmi-folder" aria-hidden="true">▣</span><span><strong>选择文件夹</strong><small>包含 Markdown 文档及本地图片</small></span><input type="file" webkitdirectory multiple aria-label="文档文件夹"></label>' +
+        '<div class="bmi-body"><p class="bmi-help">选择 .md 文件；引用了本地图片时，请选择包含文档及图片的文件夹。导入会替换正文；首行一级标题会自动移至专栏标题。表格自动转为图片，表内文字和链接将不能单独编辑或点击。</p>' +
+        '<label class="bmi-label">选择文档</label><label class="bmi-drop"><span class="bmi-folder" aria-hidden="true">▣</span><span><strong>选择文件夹</strong><small>包含 Markdown 文档及本地图片</small></span><input type="file" webkitdirectory multiple aria-label="文档文件夹"></label>' +
+        '<label class="bmi-drop" style="margin-top:8px"><span class="bmi-folder" aria-hidden="true">M↓</span><span><strong>直接选择 .md 文件</strong><small>适合仅含文字、公式、表格的文档</small></span><input type="file" accept=".md,text/markdown" aria-label="Markdown 文件"></label>' +
         '<div class="bmi-field"><label class="bmi-label" for="bmi-md-select">Markdown 文档</label><select id="bmi-md-select" aria-label="Markdown 文档"></select></div>' +
-        '<label class="bmi-option"><input type="checkbox" data-option="watermark"><span><strong>图片添加水印</strong><small>默认关闭，仅影响本次上传的本地图片</small></span></label>' +
-        '<div role="status">请选择文档文件夹。</div><div class="bmi-actions"><button type="button" data-action="import" disabled>上传图片并导入</button><button type="button" data-action="close">关闭</button></div><div class="bmi-foot">v' + VERSION + ' · 图片默认不添加水印</div></div>';
+        '<label class="bmi-option"><input type="checkbox" data-option="watermark"><span><strong>图片添加水印</strong><small>默认关闭，影响本地图片和表格图片</small></span></label>' +
+        '<div role="status">请选择 .md 文件或文档文件夹。</div><div class="bmi-actions"><button type="button" data-action="import" disabled>上传图片并导入</button><button type="button" data-action="close">关闭</button></div><div class="bmi-foot">v' + VERSION + ' · 图片默认不添加水印</div></div>';
       document.body.append(panel);
       const input = panel.querySelector('input[type="file"]');
+      const markdownInput = panel.querySelector('input[aria-label="Markdown 文件"]');
       const watermark = panel.querySelector('[data-option="watermark"]');
       const select = panel.querySelector('select');
       const status = panel.querySelector('[role="status"]');
@@ -671,28 +959,31 @@
       async function preview() {
         const current = ++revision;
         start.disabled = true;
+        status.textContent = '正在检查文档并生成表格图片…';
         try {
           const { parser, options } = nativeEditor();
           const plan = await planImport(files, select.value, parser, options);
           if (current !== revision || disposed) return;
           const count = new Set([...plan.entries.values()].filter(entry => entry.kind === 'local').map(entry => entry.key)).size;
           if (plan.title !== null) checkArticleTitle(plan.title);
-          status.textContent = `检查通过：${plan.occurrences} 处图片，${count} 个本地图片文件。\n` +
+          status.textContent = `检查通过：${plan.tables} 张表格 → ${plan.tableImages} 张图片；共 ${plan.occurrences} 处图片，${count} 个上传文件。\n` +
             (plan.title !== null ? `专栏标题：${plan.title}\n` : '') + '点击导入后将替换当前正文。';
           start.disabled = false;
         } catch (error) { if (current === revision) status.textContent = error.message; }
       }
-      input.onchange = () => {
-        files = [...input.files];
+      const chooseFiles = selected => {
+        files = [...selected];
         select.replaceChildren();
         for (const file of files.filter(file => /\.md$/i.test(file.name))) {
           const option = document.createElement('option');
           option.value = option.textContent = file.webkitRelativePath || file.name;
           select.append(option);
         }
-        if (!select.options.length) { start.disabled = true; status.textContent = '所选文件夹中没有 .md 文档。'; return; }
+        if (!select.options.length) { start.disabled = true; status.textContent = '所选内容中没有 .md 文档。'; return; }
         void preview();
       };
+      input.onchange = () => chooseFiles(input.files);
+      markdownInput.onchange = () => chooseFiles(markdownInput.files);
       select.onchange = () => void preview();
       const dismiss = panel.querySelector('[data-action="dismiss"]');
       const closePanel = () => {
@@ -702,16 +993,16 @@
       start.onclick = async () => {
         if (activeController) return;
         activeController = new AbortController();
-        start.disabled = input.disabled = select.disabled = watermark.disabled = true;
+        start.disabled = input.disabled = markdownInput.disabled = select.disabled = watermark.disabled = true;
         close.textContent = '取消导入';
         try {
           const result = await importFiles(files, select.value, activeController.signal,
             text => { status.textContent = text; }, { watermark: watermark.checked });
-          status.textContent = `导入完成：${result.images} 处图片。请检查正文及预览，再保存草稿。`;
+          status.textContent = `导入完成：${result.tables} 张表格，${result.images} 处图片。请检查正文及预览，再保存草稿。`;
         } catch (error) { status.textContent = error.message; }
         finally {
           activeController = null;
-          start.disabled = input.disabled = select.disabled = watermark.disabled = false;
+          start.disabled = input.disabled = markdownInput.disabled = select.disabled = watermark.disabled = false;
           close.textContent = '关闭';
         }
       };
@@ -723,11 +1014,12 @@
   if (document.body) mountImageImport();
   window.biliLatexImport = Object.freeze({
     version: VERSION, findDollarSpans, protectMarkdown, transformHtml,
-    splitLeadingTitle,
+    splitLeadingTitle, extractTables, layoutTable, renderTable, convertTables,
     fileIndex, imageSource, collectImageSources, planImport, prepareImages, withImageRenderer, importFiles,
     uninstall() {
       disposed = true;
       activeController?.abort();
+      tableMathFrame?.remove();
       panel?.remove();
       launcher?.remove();
       document.removeEventListener('DOMContentLoaded', mountImageImport);

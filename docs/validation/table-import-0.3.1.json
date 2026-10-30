@@ -1,0 +1,104 @@
+{
+  "date": "2026-10-30",
+  "version": "0.3.1",
+  "stage": "saved-and-reloaded",
+  "published": false,
+  "before": {
+    "formulas": [
+      {
+        "alignment": "start",
+        "formula": "a^2+b^2=c^2"
+      },
+      {
+        "alignment": "center",
+        "formula": "f(x)=(x+1)^2"
+      }
+    ],
+    "hasEnd": true,
+    "images": [
+      {
+        "alt": "a^2+b^2=c^2",
+        "formula": "a^2+b^2=c^2",
+        "height": 24,
+        "loaded": true,
+        "width": 102
+      },
+      {
+        "alt": "表格 1",
+        "formula": null,
+        "height": 944,
+        "loaded": true,
+        "width": 1346
+      },
+      {
+        "alt": "表格 2",
+        "formula": null,
+        "height": 682,
+        "loaded": true,
+        "width": 1444
+      },
+      {
+        "alt": "f(x)=(x+1)^2",
+        "formula": "f(x)=(x+1)^2",
+        "height": 26,
+        "loaded": true,
+        "width": 130
+      },
+      {
+        "alt": "",
+        "formula": null,
+        "height": 0,
+        "loaded": false,
+        "width": 0
+      }
+    ]
+  },
+  "after": {
+    "formulas": [
+      {
+        "alignment": "start",
+        "formula": "a^2+b^2=c^2"
+      },
+      {
+        "alignment": "center",
+        "formula": "f(x)=(x+1)^2"
+      }
+    ],
+    "hasEnd": true,
+    "images": [
+      {
+        "alt": "a^2+b^2=c^2",
+        "formula": "a^2+b^2=c^2",
+        "height": 24,
+        "loaded": true,
+        "width": 102
+      },
+      {
+        "alt": "[图片]",
+        "formula": null,
+        "height": 944,
+        "loaded": true,
+        "width": 1346
+      },
+      {
+        "alt": "[图片]",
+        "formula": null,
+        "height": 682,
+        "loaded": true,
+        "width": 1444
+      },
+      {
+        "alt": "f(x)=(x+1)^2",
+        "formula": "f(x)=(x+1)^2",
+        "height": 26,
+        "loaded": true,
+        "width": 130
+      }
+    ]
+  },
+  "captionLabels": [
+    "表格 1",
+    "表格 2"
+  ],
+  "scope": "Desktop editor and its on-page mobile preview; zebra shading 0.3.2 not installed yet"
+}

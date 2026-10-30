@@ -15,4 +15,6 @@
 
 用户脚本在浏览器中调用 Bilibili 页面已经加载的编辑器、Markdown 解析器、公式渲染与图片上传能力，不在仓库中分发 Bilibili 的打包脚本。分析文档中的节点结构和接口示例用于说明兼容方式。
 
+0.3.0 表格内公式按需从 `https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js` 加载 MathJax 3.2.2 浏览器组件，采用 Apache-2.0 许可。该第三方组件不嵌入用户脚本文件；在隔离 iframe 内执行，不对正文自动排版。
+
 演示截图包含 Bilibili 界面元素，已裁去账号信息；相关商标、界面及服务不属于本项目 MIT 授权范围。本项目与 Bilibili、Tampermonkey 等无隶属或官方背书关系。

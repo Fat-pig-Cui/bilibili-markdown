@@ -1,0 +1,14 @@
+{
+  "date": "2026-10-30",
+  "version": "0.3.1",
+  "stage": "local-chrome-canvas-and-png",
+  "bilibiliUploadVerified": false,
+  "tests": 41,
+  "stylesAndMath": "{\n  \"tables\": 2,\n  \"images\": 2,\n  \"formulaOutside\": 2\n}\nbili-md-table:1-1: 1346×944, 166606 bytes\nbili-md-table:2-1: 1444×682, 97675 bytes",
+  "longTable": "{\n  \"tables\": 1,\n  \"images\": 3,\n  \"formulaOutside\": 0\n}\nbili-md-table:1-1: 830×2764, 321976 bytes\nbili-md-table:1-2: 830×2764, 355088 bytes\nbili-md-table:1-3: 830×2764, 361955 bytes",
+  "notes": [
+    "Production Canvas and MathJax rendering executed in local Chrome harness.",
+    "Long table has 60 body rows; output is 3 pages with repeated headers.",
+    "Bilibili actual upload and persistence verification is pending."
+  ]
+}

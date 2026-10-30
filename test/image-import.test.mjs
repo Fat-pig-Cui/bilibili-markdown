@@ -382,3 +382,135 @@ test('reinstallation leaves one launcher; uninstall removes UI and rejects furth
     await assert.rejects(s.api.importFiles([], 'x.md'), /取消/);
   } finally { s.dom.window.close(); }
 });
+
+test('tables are recognized before native cleanup, preserving alignment, escaped pipes, code and math', () => {
+  const s = setup();
+  try {
+    s.parser.disable('table');
+    const markdown = s.api.protectMarkdown('前文 $x$\n\n| 左 | 中 | 右 |\n| :--- | :---: | ---: |\n| **加粗** | a\\|b | $p^k$ |\n| `code` | ~~删除~~ | [链接](https://example.com) |\n\n```md\n| 假 | 表 |\n| --- | --- |\n| a | b |\n```');
+    const tables = s.api.extractTables(markdown, s.parser);
+    assert.equal(tables.length, 1);
+    assert.deepEqual(Array.from(tables[0].align), ['left', 'center', 'right']);
+    assert.equal(tables[0].rows[1][0][0].bold, true);
+    assert.equal(tables[0].rows[1][1][0].text, 'a|b');
+    assert.equal(tables[0].rows[1][2][0].math, 'p^k');
+    assert.equal(tables[0].rows[2][0][0].code, true);
+    assert.equal(tables[0].rows[2][1][0].strike, true);
+    assert.equal(tables[0].rows[2][2][0].link, true);
+    assert.equal(s.parser.parse(markdown, {}).some(t => t.type === 'table_open'), false);
+  } finally { s.dom.window.close(); }
+});
+
+test('pagination preserves complete rows and repeats the header, rejecting a row too tall to fit', () => {
+  const s = setup();
+  try {
+    const context = { measureText: text => ({ width: Array.from(text).length * 13 }) };
+    const table = { align: ['left', 'right'], rows: Array.from({ length: 80 }, (_, i) => [[{ text: String(i) }], [{ text: '内容' }]]) };
+    const layout = s.api.layoutTable(table, context);
+    assert.ok(layout.pages.length > 1);
+    assert.equal(layout.pages.flat().length - layout.pages.length, 79);
+    assert.ok(layout.pages.every(page => page[0] === layout.pages[0][0]));
+    assert.ok(layout.pages.every(page => page.reduce((sum, row) => sum + row.height, 0) <= 1400));
+    table.rows[1][0][0].text = '字'.repeat(3000);
+    assert.throws(() => s.api.layoutTable(table, context), /单行内容过长/);
+  } finally { s.dom.window.close(); }
+});
+
+test('table conversion replaces only table source ranges and uploads generated PNG pages using native images', async () => {
+  const s = setup();
+  try {
+    const markdown = '# 表格稿\n\n前文 $x^2$\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n\n后文\n\n```md\n| 示例 | 不转换 |\n| --- | --- |\n```';
+    const files = [s.md(markdown)];
+    const flags = [];
+    let renders = 0;
+    const { editor, title } = host(s, async file => { flags.push(file.watermark); assert.equal(file.type, 'image/png'); return s.result(flags.length); });
+    const options = editor.extensionManager.extensions[0].options;
+    options.tableRenderer = async table => {
+      renders++;
+      assert.equal(table.rows[1][0][0].text, '1');
+      return [new s.dom.window.File(['png-1'], 'table-1.png', { type: 'image/png' }), new s.dom.window.File(['png-2'], 'table-2.png', { type: 'image/png' })];
+    };
+    const preview = await s.api.planImport(files, 'project/docs/article.md', s.parser, options);
+    assert.equal(preview.tables, 1);
+    assert.equal(preview.tableImages, 2);
+    const result = await s.api.importFiles(files, 'project/docs/article.md');
+    assert.equal(result.images, 2);
+    assert.equal(renders, 1, 'preview and import reuse prepared files');
+    assert.deepEqual(flags, [false, false]);
+    assert.equal(title.value, '表格稿');
+    const doc = new s.dom.window.DOMParser().parseFromString(editor.state.doc.html, 'text/html');
+    assert.deepEqual([...doc.querySelectorAll('img[data-eva-image]')].map(img => img.dataset.caption), ['表格 1（1/2）', '表格 1（2/2）']);
+    assert.equal(doc.querySelectorAll('table').length, 0);
+    assert.equal(doc.querySelector('code').textContent, '| 示例 | 不转换 |\n| --- | --- |\n');
+    assert.equal(doc.querySelector('img[data-type="latex"]').dataset.formula, 'x^2');
+    assert.ok(doc.body.textContent.indexOf('前文') < doc.body.textContent.indexOf('后文'));
+  } finally { s.dom.window.close(); }
+});
+
+test('pagination counts against image limits and render or upload failure never replaces the draft', async () => {
+  const s = setup();
+  try {
+    let uploads = 0;
+    const { editor, title } = host(s, async () => { uploads++; throw new Error('上传失败'); });
+    const before = editor.state.doc;
+    const options = editor.extensionManager.extensions[0].options;
+    const files = [s.md('# 新标题\n\n| A | B |\n| --- | --- |\n| 1 | 2 |')];
+    options.tableRenderer = async () => { throw new Error('渲染失败'); };
+    await assert.rejects(s.api.importFiles(files, 'project/docs/article.md'), /渲染失败/);
+    assert.equal(uploads, 0);
+    const file = new s.dom.window.File(['png'], 'page.png', { type: 'image/png' });
+    options.tableRenderer = async () => [file, file];
+    options.limit = 1;
+    await assert.rejects(s.api.importFiles(files, 'project/docs/article.md'), /图片限制/);
+    assert.equal(uploads, 0);
+    options.limit = 5;
+    await assert.rejects(s.api.importFiles(files, 'project/docs/article.md'), /上传失败/);
+    assert.equal(editor.state.doc, before);
+    assert.equal(title.value, '原标题');
+    assert.equal(editor.commits, 0);
+  } finally { s.dom.window.close(); }
+});
+
+test('unsupported table images, HTML tables and nested tables fail explicitly before upload', async () => {
+  const s = setup();
+  try {
+    for (const [source, message] of [
+      ['| A | B |\n| --- | --- |\n| ![图](missing.png) | 2 |', /包含图片/],
+      ['<table><tr><td>1</td></tr></table>', /HTML 表格/],
+      ['> | A | B |\n> | --- | --- |\n> | 1 | 2 |', /嵌套/],
+    ]) await assert.rejects(s.api.planImport([s.md(source)], 'project/docs/article.md', s.parser), message);
+  } finally { s.dom.window.close(); }
+});
+
+test('panel accepts a standalone Markdown file and uses the same table upload coordinator', { timeout: 2000 }, async () => {
+  const s = setup();
+  try {
+    let release, started;
+    const ready = new Promise(resolve => { started = resolve; });
+    const { editor, title } = host(s, () => { started(); return new Promise(resolve => { release = () => resolve(s.result()); }); });
+    editor.extensionManager.extensions[0].options.tableRenderer = async () => [new s.dom.window.File(['png'], 'table.png', { type: 'image/png' })];
+    const document = s.dom.window.document;
+    document.querySelector('#bili-md-image-import').click();
+    const panel = document.querySelector('#bili-md-image-panel');
+    const input = panel.querySelector('input[aria-label="Markdown 文件"]');
+    const folder = panel.querySelector('input[webkitdirectory]');
+    assert.equal(input.hasAttribute('webkitdirectory'), false);
+    const file = new s.dom.window.File(['# 单文件表格\n\n| A | B |\n| --- | --- |\n| 1 | 2 |'], 'table.md', { type: 'text/markdown' });
+    Object.defineProperty(input, 'files', { value: [file] });
+    input.dispatchEvent(new s.dom.window.Event('change'));
+    const button = panel.querySelector('[data-action="import"]');
+    const deadline = Date.now() + 1000;
+    while (button.disabled && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 5));
+    assert.equal(button.disabled, false);
+    assert.match(panel.querySelector('[role="status"]').textContent, /1 张表格/);
+    const pending = button.onclick();
+    await ready;
+    assert.equal(input.disabled, true);
+    assert.equal(folder.disabled, true);
+    release();
+    await pending;
+    assert.equal(input.disabled, false);
+    assert.equal(title.value, '单文件表格');
+    assert.match(editor.state.doc.html, /data-eva-image="enhanced"/);
+  } finally { s.dom.window.close(); }
+});

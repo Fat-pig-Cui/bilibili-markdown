@@ -1,0 +1,143 @@
+{
+  "date": "2026-10-30",
+  "userscriptVersion": "0.2.7",
+  "fixture": "examples/feature-coverage/article.md",
+  "stage": "saved-and-reloaded",
+  "published": false,
+  "scope": "Desktop editor DOM and screenshot; no published-page or physical-device test",
+  "before": {
+    "title": "Markdown 全功能导入验收",
+    "headings": 14,
+    "formulas": [
+      {
+        "alignment": "start",
+        "paragraphText": "有序第三项：包含行内公式 ，公式前后文字应在同一列表项。",
+        "source": "a_1+a_2=a_3",
+        "style": null
+      },
+      {
+        "alignment": "start",
+        "paragraphText": "行内公式前检查点  行内公式后检查点。公式应与左右文字处于同一段，上下标和反斜杠不能丢失。",
+        "source": "P(X=k)=\\binom{n}{k}p^k(1-p)^{n-k}",
+        "style": null
+      },
+      {
+        "alignment": "start",
+        "paragraphText": "同段多公式检查点： 加上  等于 ，文字顺序不应改变。",
+        "source": "x_i^2",
+        "style": null
+      },
+      {
+        "alignment": "start",
+        "paragraphText": "同段多公式检查点： 加上  等于 ，文字顺序不应改变。",
+        "source": "y_i^2",
+        "style": null
+      },
+      {
+        "alignment": "start",
+        "paragraphText": "同段多公式检查点： 加上  等于 ，文字顺序不应改变。",
+        "source": "r^2",
+        "style": null
+      },
+      {
+        "alignment": "center",
+        "paragraphText": "",
+        "source": "\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}",
+        "style": "text-align: center;"
+      },
+      {
+        "alignment": "center",
+        "paragraphText": "",
+        "source": "\\begin{aligned}\nf(x) &= x^2 + 2x + 1 \\\\\n     &= (x+1)^2\n\\end{aligned}",
+        "style": "text-align: center;"
+      }
+    ],
+    "emptyParagraphs": 0,
+    "image": {
+      "width": 720,
+      "height": 320
+    }
+  },
+  "after": {
+    "editor": {
+      "caption": "图片题注检查点：蓝色曲线",
+      "code": "def square(x):\n    return x ** 2\n\n# $not_math$ $$not_display_math$$\n# **not_bold** ~~not_strike~~\n# ![not_an_image](missing-in-code.png)\nprint(square(3))  # 9\n",
+      "emptyParagraphs": 0,
+      "formulaCount": 7,
+      "formulas": [
+        {
+          "alignment": "start",
+          "loaded": true,
+          "paragraphText": "有序第三项：包含行内公式 ，公式前后文字应在同一列表项。",
+          "source": "a_1+a_2=a_3",
+          "style": null
+        },
+        {
+          "alignment": "start",
+          "loaded": true,
+          "paragraphText": "行内公式前检查点  行内公式后检查点。公式应与左右文字处于同一段，上下标和反斜杠不能丢失。",
+          "source": "P(X=k)=\\binom{n}{k}p^k(1-p)^{n-k}",
+          "style": null
+        },
+        {
+          "alignment": "start",
+          "loaded": true,
+          "paragraphText": "同段多公式检查点： 加上  等于 ，文字顺序不应改变。",
+          "source": "x_i^2",
+          "style": null
+        },
+        {
+          "alignment": "start",
+          "loaded": true,
+          "paragraphText": "同段多公式检查点： 加上  等于 ，文字顺序不应改变。",
+          "source": "y_i^2",
+          "style": null
+        },
+        {
+          "alignment": "start",
+          "loaded": true,
+          "paragraphText": "同段多公式检查点： 加上  等于 ，文字顺序不应改变。",
+          "source": "r^2",
+          "style": null
+        },
+        {
+          "alignment": "center",
+          "loaded": true,
+          "paragraphText": "",
+          "source": "\\sum_{i=1}^{n} i = \\frac{n(n+1)}{2}",
+          "style": "text-align: center;"
+        },
+        {
+          "alignment": "center",
+          "loaded": true,
+          "paragraphText": "",
+          "source": "\\begin{aligned}\nf(x) &= x^2 + 2x + 1 \\\\\n     &= (x+1)^2\n\\end{aligned}",
+          "style": "text-align: center;"
+        }
+      ],
+      "hasEnd": true,
+      "hasRetiredCase": false,
+      "headings": 14,
+      "hr": 1,
+      "images": [
+        {
+          "height": 320,
+          "loaded": true,
+          "width": 720
+        }
+      ],
+      "links": 3,
+      "marks": {
+        "em": 4,
+        "s": 2,
+        "strong": 5,
+        "u": 0
+      },
+      "ordered": 3,
+      "quote": 1,
+      "unordered": 3
+    },
+    "mobilePreview": null,
+    "title": "Markdown 全功能导入验收"
+  }
+}
