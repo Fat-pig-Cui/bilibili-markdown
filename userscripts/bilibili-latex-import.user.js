@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bilibili 专栏 Markdown 公式与本地图片导入
 // @namespace    https://github.com/Fat-pig-Cui/bilibili-markdown
-// @version      0.3.3
+// @version      0.3.4
 // @description  保留 Markdown 原生公式，将表格转为图片，并上传文档引用的本地图片
 // @match        https://member.bilibili.com/york/read-draft*
 // @match        https://member.bilibili.com/york/read-editor*
@@ -18,7 +18,7 @@
   'use strict';
 
   const MATHJAX_ENDPOINT = 'https://api.bilibili.com/x/web-frontend/mathjax/tex?formula=';
-  const VERSION = '0.3.3';
+  const VERSION = '0.3.4';
   // Re-running from Console must not leave multiple listeners behind.
   window.biliLatexImport?.uninstall?.();
 
@@ -281,6 +281,19 @@
     return changed ? doc.body.innerHTML : html;
   }
 
+  function trimCodeBlockTrailingNewline(html) {
+    if (!html.includes('<pre')) return html;
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    let changed = false;
+    for (const code of doc.querySelectorAll('pre > code')) {
+      const last = code.lastChild;
+      if (last?.nodeType !== 3) continue;
+      if (last.data.endsWith('\r\n')) { last.data = last.data.slice(0, -2); changed = true; }
+      else if (last.data.endsWith('\n')) { last.data = last.data.slice(0, -1); changed = true; }
+    }
+    return changed ? doc.body.innerHTML : html;
+  }
+
   function onPaste(event) {
     const clipboard = event.clipboardData;
     if (!clipboard || !event.target || !event.target.closest?.('.ProseMirror')) return;
@@ -313,7 +326,7 @@
         converted = doc.body.innerHTML;
       }
     }
-    converted = unwrapImageParagraphs(transformHtml(converted));
+    converted = trimCodeBlockTrailingNewline(unwrapImageParagraphs(transformHtml(converted)));
     if (converted === html) return;
     try {
       // Bilibili supplies a writable DataTransfer for its synthetic import.
@@ -1014,7 +1027,7 @@
   if (document.body) mountImageImport();
   window.biliLatexImport = Object.freeze({
     version: VERSION, findDollarSpans, protectMarkdown, transformHtml,
-    splitLeadingTitle, extractTables, layoutTable, renderTable, convertTables,
+    splitLeadingTitle, extractTables, layoutTable, renderTable, convertTables, trimCodeBlockTrailingNewline,
     fileIndex, imageSource, collectImageSources, planImport, prepareImages, withImageRenderer, importFiles,
     uninstall() {
       disposed = true;

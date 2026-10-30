@@ -1,6 +1,6 @@
 {
   "name": "bilibili-markdown",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "private": true,
   "type": "module",
   "description": "Bilibili 专栏 Markdown 原生公式与本地图片导入用户脚本，附离线公式图片转换器",

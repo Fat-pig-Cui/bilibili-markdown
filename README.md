@@ -2,7 +2,7 @@
 
 为 Bilibili 专栏编辑器补齐 Markdown 导入中的美元公式和本地图片。公式以 B 站原生可编辑节点导入，行内公式可以与文字处于同一段落。
 
-**当前源码版本：0.3.3 · MIT · 非官方工具**
+**当前源码版本：0.3.4 · MIT · 非官方工具**
 
 [安装用户脚本](https://github.com/Fat-pig-Cui/bilibili-markdown/releases/latest/download/bilibili-latex-import.user.js) · [下载示例文件夹](https://github.com/Fat-pig-Cui/bilibili-markdown/releases/latest/download/local-images-example.zip) · [版本记录](CHANGELOG.md) · [反馈问题](https://github.com/Fat-pig-Cui/bilibili-markdown/issues)
 

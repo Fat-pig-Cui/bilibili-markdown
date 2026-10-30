@@ -178,6 +178,26 @@ test('image unwrapping preserves intentional empty paragraphs, inline content an
   } finally { dom.window.close(); }
 });
 
+test('file import removes the Markdown renderer newline at the end of code blocks', () => {
+  const { dom } = load();
+  try {
+    const { window } = dom;
+    const parser = new MarkdownIt({ html: true, breaks: true });
+    let html = parser.render('```js\nconst value = 1;\n```');
+    assert.equal(html, '<pre><code class="language-js">const value = 1;\n</code></pre>\n');
+    const event = new window.Event('paste', { bubbles: true });
+    Object.defineProperty(event, 'clipboardData', { value: {
+      getData: type => type === 'text/html' ? html : '',
+      setData: (_type, value) => { html = value; },
+    } });
+    window.document.querySelector('.ProseMirror').dispatchEvent(event);
+    const doc = new window.DOMParser().parseFromString(html, 'text/html');
+    assert.equal(doc.querySelector('pre code').textContent, 'const value = 1;');
+    assert.equal(doc.querySelector('pre code').className, 'language-js');
+    assert.equal(dom.window.biliLatexImport.trimCodeBlockTrailingNewline('<pre><code>x\n\n</code></pre>'), '<pre><code>x\n</code></pre>');
+  } finally { dom.window.close(); }
+});
+
 test('file import preserves every original TeX through native Markdown preprocessing', async () => {
   const { dom } = load();
   try {

@@ -441,7 +441,7 @@ test('table conversion replaces only table source ranges and uploads generated P
     const doc = new s.dom.window.DOMParser().parseFromString(editor.state.doc.html, 'text/html');
     assert.deepEqual([...doc.querySelectorAll('img[data-eva-image]')].map(img => img.dataset.caption), ['表格 1（1/2）', '表格 1（2/2）']);
     assert.equal(doc.querySelectorAll('table').length, 0);
-    assert.equal(doc.querySelector('code').textContent, '| 示例 | 不转换 |\n| --- | --- |\n');
+    assert.equal(doc.querySelector('code').textContent, '| 示例 | 不转换 |\n| --- | --- |');
     assert.equal(doc.querySelector('img[data-type="latex"]').dataset.formula, 'x^2');
     assert.ok(doc.body.textContent.indexOf('前文') < doc.body.textContent.indexOf('后文'));
   } finally { s.dom.window.close(); }
