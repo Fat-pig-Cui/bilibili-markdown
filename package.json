@@ -1,0 +1,36 @@
+{
+  "name": "bilibili-markdown",
+  "version": "0.2.6",
+  "private": true,
+  "type": "module",
+  "description": "Bilibili 专栏 Markdown 原生公式与本地图片导入用户脚本，附离线公式图片转换器",
+  "bin": {
+    "bilibili-md-formulas": "src/cli.mjs"
+  },
+  "scripts": {
+    "convert": "node src/cli.mjs",
+    "test": "node --test",
+    "check": "node --check userscripts/bilibili-latex-import.user.js && node --check src/cli.mjs && node --check src/formula.mjs && node --check src/markdown.mjs"
+  },
+  "dependencies": {
+    "mathjax-full": "^3.2.2",
+    "sharp": "^0.35.5"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1",
+    "markdown-it": "^15.0.3"
+  },
+  "license": "MIT",
+  "author": "Fat-pig-Cui",
+  "homepage": "https://github.com/Fat-pig-Cui/bilibili-markdown",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Fat-pig-Cui/bilibili-markdown.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Fat-pig-Cui/bilibili-markdown/issues"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

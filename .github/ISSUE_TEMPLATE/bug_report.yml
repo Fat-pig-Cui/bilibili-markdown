@@ -1,0 +1,37 @@
+name: 缺陷报告
+description: 导入、公式、图片或面板行为异常
+title: '[Bug] '
+body:
+  - type: markdown
+    attributes:
+      value: 请勿提交账号凭据、Cookie、CSRF、令牌、HAR 或私人文章。截图须隐藏账号和草稿标识。
+  - type: input
+    id: version
+    attributes:
+      label: 用户脚本版本
+      placeholder: 0.2.6
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 浏览器、操作系统与脚本管理器版本
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤及最小示例
+      description: 优先使用仓库示例；若提供 Markdown 或图片，请确认可公开。
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: 预期结果与实际结果
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 脱敏截图或补充信息

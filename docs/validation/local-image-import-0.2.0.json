@@ -1,0 +1,58 @@
+{
+  "date": "2026-10-29",
+  "version": "0.2.0",
+  "stage": "reopened-saved-draft",
+  "published": false,
+  "captions": [
+    "蓝色曲线",
+    "两步流程",
+    "再次展示曲线"
+  ],
+  "code": [
+    "![同样不上传](missing-code.png)\n$code_should_stay_plain$\n"
+  ],
+  "images": [
+    {
+      "formula": "P(A)=\\frac{a}{b}",
+      "height": 40,
+      "loaded": true,
+      "src": "//api.bilibili.com/x/web-frontend/mathjax/tex?formula=P(A)%3D%5Cfrac%7Ba%7D%7Bb%7D",
+      "type": "latex",
+      "width": 87
+    },
+    {
+      "formula": null,
+      "height": 320,
+      "loaded": true,
+      "src": "https://i0.hdslb.com/bfs/new_dyn/REDACTED_IMAGE_1.png",
+      "type": null,
+      "width": 720
+    },
+    {
+      "formula": null,
+      "height": 260,
+      "loaded": true,
+      "src": "https://i0.hdslb.com/bfs/new_dyn/REDACTED_IMAGE_2.png",
+      "type": null,
+      "width": 720
+    },
+    {
+      "formula": null,
+      "height": 320,
+      "loaded": true,
+      "src": "https://i0.hdslb.com/bfs/new_dyn/REDACTED_IMAGE_1.png",
+      "type": null,
+      "width": 720
+    },
+    {
+      "formula": "P(X=k)=\\binom{n}{k}p^k(1-p)^{n-k}",
+      "height": 51,
+      "loaded": true,
+      "src": "//api.bilibili.com/x/web-frontend/mathjax/tex?formula=P(X%3Dk)%3D%5Cbinom%7Bn%7D%7Bk%7Dp%5Ek(1-p)%5E%7Bn-k%7D",
+      "type": "latex",
+      "width": 251
+    }
+  ],
+  "redacted": true,
+  "redactionNote": "草稿标识已移除；上传图片地址替换为一致的占位符，保留重复引用关系。"
+}

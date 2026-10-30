@@ -1,0 +1,92 @@
+{
+  "version": "0.2.3",
+  "date": "2026-10-29",
+  "children": [
+    {
+      "emptyParagraph": false,
+      "image": false,
+      "index": 0,
+      "tag": "P",
+      "text": "这是一份可重复导入的测试文档。行内公式  应当与前后文字位于同一段。"
+    },
+    {
+      "emptyParagraph": false,
+      "image": true,
+      "index": 1,
+      "tag": "DIV",
+      "text": "蓝色曲线"
+    },
+    {
+      "emptyParagraph": false,
+      "image": false,
+      "index": 2,
+      "tag": "P",
+      "text": "下面使用带中文、空格和括号的图片文件名，并采用引用式图片语法。"
+    },
+    {
+      "emptyParagraph": false,
+      "image": true,
+      "index": 3,
+      "tag": "DIV",
+      "text": "两步流程"
+    },
+    {
+      "emptyParagraph": false,
+      "image": false,
+      "index": 4,
+      "tag": "P",
+      "text": "重复引用第一张图片，应复用上传结果，正文仍显示三处图片。"
+    },
+    {
+      "emptyParagraph": false,
+      "image": true,
+      "index": 5,
+      "tag": "DIV",
+      "text": "再次展示曲线"
+    },
+    {
+      "emptyParagraph": false,
+      "image": false,
+      "index": 6,
+      "tag": "P",
+      "text": ""
+    },
+    {
+      "emptyParagraph": false,
+      "image": false,
+      "index": 7,
+      "tag": "P",
+      "text": "代码中的图片语法不应触发上传：![不上传](missing-inline.png)。"
+    },
+    {
+      "emptyParagraph": false,
+      "image": false,
+      "index": 8,
+      "tag": "EVA3-CODE-BLOCK-CONTAINER",
+      "text": "123![同样不上传](missing-code.png)\n$code_should_stay_plain$\n"
+    }
+  ],
+  "formulas": [
+    "P(A)=\\frac{a}{b}",
+    "P(X=k)=\\binom{n}{k}p^k(1-p)^{n-k}"
+  ],
+  "images": [
+    {
+      "alt": "蓝色曲线",
+      "height": 320,
+      "width": 720
+    },
+    {
+      "alt": "两步流程",
+      "height": 260,
+      "width": 720
+    },
+    {
+      "alt": "再次展示曲线",
+      "height": 320,
+      "width": 720
+    }
+  ],
+  "redacted": true,
+  "redactionNote": "草稿标识已移除；上传图片地址替换为一致的占位符，保留重复引用关系。"
+}

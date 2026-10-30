@@ -1,0 +1,14 @@
+node_modules/
+dist/
+*_bilibili/
+.local-private/
+.npm-cache/
+coverage/
+.DS_Store
+.env
+.env.*
+!.env.example
+*.log
+*.har
+*.pem
+*.key
