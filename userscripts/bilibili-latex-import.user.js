@@ -697,8 +697,8 @@
       const replacement = files.map((file, part) => {
         const source = `bili-md-table:${index + 1}-${part + 1}`;
         generated.set(source, new File([file], `table-${index + 1}-${part + 1}.png`, { type: 'image/png' }));
-        const caption = `表格 ${index + 1}` + (files.length > 1 ? `（${part + 1}/${files.length}）` : '');
-        return `<img src="${source}" alt="${caption}">`;
+        // No alt: table images keep an empty caption.
+        return `<img src="${source}">`;
       }).join('\n\n');
       lines.splice(table.start, table.end - table.start, replacement + '\n');
     }

@@ -439,7 +439,7 @@ test('table conversion replaces only table source ranges and uploads generated P
     assert.deepEqual(flags, [false, false]);
     assert.equal(title.value, '表格稿');
     const doc = new s.dom.window.DOMParser().parseFromString(editor.state.doc.html, 'text/html');
-    assert.deepEqual([...doc.querySelectorAll('img[data-eva-image]')].map(img => img.dataset.caption), ['表格 1（1/2）', '表格 1（2/2）']);
+    assert.deepEqual([...doc.querySelectorAll('img[data-eva-image]')].map(img => img.dataset.caption), ['', '']);
     assert.equal(doc.querySelectorAll('table').length, 0);
     assert.equal(doc.querySelector('code').textContent, '| 示例 | 不转换 |\n| --- | --- |');
     assert.equal(doc.querySelector('img[data-type="latex"]').dataset.formula, 'x^2');
